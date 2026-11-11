@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Тренажёр 1С:Профессионал</title>
+<style>
+  :root, [data-theme="light"] {
+    --bg: #f4f6f8; --card: #ffffff; --text: #1f2937; --muted: #6b7280;
+    --border: #e5e7eb; --primary: #2563eb; --primary-hover: #1d4ed8;
+    --correct: #10b981; --correct-bg: #d1fae5;
+    --wrong: #ef4444; --wrong-bg: #fee2e2;
+    --warn: #f59e0b; --star: #f59e0b;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    --nav-bg: #e2e8f0;
+  }
+  [data-theme="dark"] {
+    --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --muted: #94a3b8;
+    --border: #334155; --primary: #60a5fa; --primary-hover: #93c5fd;
+    --correct: #34d399; --correct-bg: #064e3b;
+    --wrong: #f87171; --wrong-bg: #7f1d1d;
+    --warn: #fbbf24; --star: #fbbf24;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    --nav-bg: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg); color: var(--text); margin: 0; padding: 16px; line-height: 1.5;
+    transition: background 0.2s, color 0.2s;
+  }
+  .container { max-width: 1000px; margin: 0 auto; }
+  
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 20px; gap: 12px; flex-wrap: wrap;
+  }
+  h1 { font-size: 1.5rem; margin: 0; font-weight: 600; }
+  .header-actions { display: flex; gap: 8px; }
+  .icon-btn {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    width: 42px; height: 42px; border-radius: 10px; cursor: pointer;
+    font-size: 1.2rem; display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { background: var(--nav-bg); border-color: var(--primary); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin-bottom: 16px; box-shadow: var(--shadow);
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .menu-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px; margin-bottom: 16px;
+  }
+  .menu-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; cursor: pointer; transition: all 0.15s;
+    box-shadow: var(--shadow); text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .menu-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+  .menu-card .icon { font-size: 2.5rem; }
+  .menu-card .title { font-size: 1.2rem; font-weight: 700; }
+  .menu-card .subtitle { font-size: 0.9rem; color: var(--muted); }
+
+  .test-layout {
+    display: flex; gap: 24px; align-items: flex-start;
+  }
+  .sidebar {
+    width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px;
+  }
+  .main-content {
+    flex-grow: 1; min-width: 0;
+  }
+  
+  .q-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+    gap: 8px;
+  }
+  .q-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); font-size: 0.9rem; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.15s; padding: 0;
+  }
+  .q-btn:hover { border-color: var(--primary); }
+  .q-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+  .q-btn.answered { background: var(--nav-bg); border-color: var(--nav-bg); }
+  .q-btn.correct { background: var(--correct); color: white; border-color: var(--correct); }
+  .q-btn.wrong { background: var(--wrong); color: white; border-color: var(--wrong); }
+
+  .exam-top-bar {
+    display: flex; gap: 2px; margin-bottom: 24px; background: var(--nav-bg);
+    padding: 4px; border-radius: 8px; overflow-x: auto;
+  }
+  .exam-step {
+    flex: 1; min-width: 30px; height: 32px; display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; font-weight: 600; border-radius: 6px; color: var(--muted);
+    background: var(--card); transition: all 0.2s;
+  }
+  .exam-step.current { background: var(--primary); color: white; }
+  .exam-step.passed { background: var(--correct); color: white; }
+  .exam-step.failed { background: var(--wrong); color: white; }
+
+  .question { font-size: 1.15rem; font-weight: 500; margin-bottom: 24px; }
+  .question-meta {
+    font-size: 0.85rem; color: var(--muted); margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  
+  .option {
+    display: flex; align-items: flex-start; gap: 12px;
+    width: 100%; text-align: left; padding: 14px 16px;
+    margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); cursor: pointer;
+    font-weight: 400; transition: all 0.15s;
+  }
+  .option:hover:not(:disabled) { border-color: var(--primary); background: var(--bg); }
+  .option:disabled { cursor: default; }
+  .option .checkbox {
+    width: 20px; height: 20px; border: 2px solid var(--muted); border-radius: 4px;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .option.selected .checkbox { border-color: var(--primary); }
+  .option.selected .checkbox::after { content: ''; width: 10px; height: 10px; background: var(--primary); border-radius: 2px; }
+  
+  .option.correct { background: var(--correct-bg); border-color: var(--correct); }
+  .option.correct .checkbox { border-color: var(--correct); }
+  .option.correct .checkbox::after { background: var(--correct); }
+  
+  .option.wrong { background: var(--wrong-bg); border-color: var(--wrong); }
+  .option.wrong .checkbox { border-color: var(--wrong); }
+  .option.wrong .checkbox::after { background: var(--wrong); }
+
+  .option .mark-icon {
+    margin-left: auto; font-weight: 900; font-size: 1.1rem;
+  }
+  .option.correct .mark-icon { color: var(--correct); }
+  .option.wrong .mark-icon { color: var(--wrong); }
+
+  .nav {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 24px; gap: 12px;
+  }
+  .nav-right { display: flex; gap: 12px; }
+  .nav-btn {
+    padding: 10px 20px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;
+    background: var(--primary); color: white; transition: background 0.15s;
+  }
+  .nav-btn:hover:not(:disabled) { background: var(--primary-hover); }
+  .nav-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .nav-btn.secondary { background: var(--nav-bg); color: var(--text); }
+  .nav-btn.secondary:hover:not(:disabled) { background: var(--border); }
+  .nav-btn.danger { background: var(--wrong); color: white; }
+  .nav-btn.danger:hover:not(:disabled) { background: #dc2626; }
+  .nav-btn.sm { padding: 6px 12px; font-size: 0.85rem; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin: 16px 0; }
+  .stat-box { background: var(--bg); border-radius: 10px; padding: 14px; text-align: center; }
+  .stat-box .num { font-size: 1.6rem; font-weight: 800; }
+  .stat-box .lbl { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); font-size: 0.9rem; }
+  
+  .section-row {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border);
+    margin-bottom: 8px; background: var(--card); transition: all 0.15s;
+  }
+  .section-row:hover { border-color: var(--primary); }
+  .section-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .section-title { font-weight: 700; font-size: 1.05rem; }
+  .section-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .bar-wrap { width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--correct); transition: width 0.3s; }
+
+  @media (max-width: 768px) {
+    .test-layout { flex-direction: column; }
+    .sidebar { width: 100%; }
+    .exam-step { font-size: 0.75rem; min-width: 20px; }
+    .nav { flex-direction: column; align-items: stretch; }
+    .nav-right { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header" id="topHeader">
+    <h1 id="pageTitle">🎓 Тренажёр 1С:Профессионал</h1>
+    <div class="header-actions">
+      <button class="icon-btn" id="themeBtn" title="Сменить тему">🌙</button>
+      <button class="icon-btn hidden" id="backBtn" title="Назад">←</button>
+    </div>
+  </div>
+
+  <div id="mainMenu">
+    <div class="menu-grid">
+      <div class="menu-card" data-action="learn">
+        <div class="icon">📚</div><div class="title">Учить по разделам</div>
+        <div class="subtitle">Выбери раздел и тренируйся</div>
+      </div>
+      <div class="menu-card" data-action="exam">
+        <div class="icon">🎯</div><div class="title">Экзамен</div>
+        <div class="subtitle">14 вопросов из всех разделов</div>
+      </div>
+      <div class="menu-card" data-action="favorites">
+        <div class="icon">⭐</div><div class="title">Избранное</div>
+        <div class="subtitle" id="favCount">0 вопросов</div>
+      </div>
+    </div>
+    <div class="card"><div class="muted" id="globalStats"></div></div>
+  </div>
+
+  <div id="learnSetup" class="hidden">
+    <div class="card">
+      <h2>Настройки тренировки</h2>
+      <label for="learnMode">Режим</label>
+      <select id="learnMode">
+        <option value="random">Случайно</option>
+        <option value="sequential">По порядку</option>
+        <option value="errors">Только ошибки</option>
+      </select>
+    </div>
+    <h2 style="margin: 20px 0 12px;">Выбери раздел</h2>
+    <div id="sectionsList"></div>
+  </div>
+
+  <div id="examSetup" class="hidden">
+    <div class="card">
+      <h2>🎯 Экзамен</h2>
+      <p>Будет задано по одному случайному вопросу из каждого из 14 разделов (14 вопросов всего).</p>
+      <p><b>Сдал — от 12 правильных (≥ 86%).</b></p>
+      <div style="margin-top:16px;">
+        <button class="nav-btn" id="startExamBtn">Начать экзамен</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="favoritesSetup" class="hidden">
+    <div class="card">
+      <h2>⭐ Избранное</h2>
+      <div id="favContent"></div>
+    </div>
+  </div>
+
+  <div id="quiz" class="hidden">
+    <div id="examTopBar" class="exam-top-bar hidden"></div>
+
+    <div class="test-layout">
+      <div class="sidebar" id="sidebarNav">
+        <div class="card" style="padding: 16px;">
+          <div class="muted" style="margin-bottom: 12px; font-weight:600;">Навигация</div>
+          <div class="q-grid" id="qGrid"></div>
+        </div>
+      </div>
+
+      <div class="main-content">
+        <div class="card">
+          <div class="question-meta">
+            <span id="qMetaText"></span>
+            <button class="star-btn" id="starBtn" title="В избранное" style="background:none;border:none;cursor:pointer;font-size:1.6rem;padding:0;color:var(--star)">☆</button>
+          </div>
+          <div class="question" id="qText"></div>
+          <div id="options"></div>
+          
+          <div class="nav">
+            <button id="prevBtn" class="nav-btn secondary">← Назад</button>
+            <div class="nav-right">
+              <button id="exitBtn" class="nav-btn secondary">Выйти</button>
+              <button id="nextBtn" class="nav-btn">Далее →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="results" class="hidden">
+    <div class="card" id="resultsCard"></div>
+  </div>
+
+</div>
+
+<script src="quiz_data.js"></script>
+<script>
+const DATA = window.QUIZ_DATA || [];
+const LS_ERRORS = 'quiz_errors_v1';
+const LS_FAV    = 'quiz_favorites_v1';
+const LS_THEME  = 'quiz_theme_v1';
+
+const loadSet = (key) => { try { const r = localStorage.getItem(key); return r ? new Set(JSON.parse(r)) : new Set(); } catch { return new Set(); } };
+const saveSet = (key, set) => { try { localStorage.setItem(key, JSON.stringify([...set])); } catch {} };
+const loadStr = (key, def) => { try { return localStorage.getItem(key) || def; } catch { return def; } };
+const saveStr = (key, v) => { try { localStorage.setItem(key, v); } catch {} };
+
+const qid = (q) => q.number;
+const errors = () => loadSet(LS_ERRORS);
+const favs   = () => loadSet(LS_FAV);
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeBtn').textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+applyTheme(loadStr(LS_THEME, 'light'));
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  applyTheme(next); saveStr(LS_THEME, next);
+});
+
+const state = {
+  mode: null, questions: [], index: 0,
+  answers: [], // { selectedIdx, isRight }
+  correct: 0, wrong: 0, sessionErrors: []
+};
+
+const sections = [...new Set(DATA.map(q => q.number.split('.')[0]))].sort((a,b)=>+a-+b);
+
+function showPage(page) {
+  ['mainMenu', 'learnSetup', 'examSetup', 'favoritesSetup', 'quiz', 'results']
+    .forEach(id => document.getElementById(id).classList.add('hidden'));
+  document.getElementById(page).classList.remove('hidden');
+  document.getElementById('backBtn').classList.toggle('hidden', page === 'mainMenu');
+  
+  const titles = { mainMenu: '🎓 Тренажёр 1С:Профессионал', learnSetup: '📚 Учить по разделам', examSetup: '🎯 Экзамен', favoritesSetup: '⭐ Избранное', quiz: '📝 Тест', results: '📊 Результаты' };
+  document.getElementById('pageTitle').textContent = titles[page] || '';
+}
+
+document.getElementById('backBtn').addEventListener('click', () => {
+  if (state.mode === 'learn' && !document.getElementById('quiz').classList.contains('hidden')) {
+    if (!confirm('Выйти из теста? Прогресс сессии будет потерян.')) return;
+  }
+  state.mode = null; showPage('mainMenu'); refreshMain();
+});
+
+document.querySelectorAll('.menu-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const action = card.dataset.action;
+    if (action === 'learn') { renderSectionsList(); showPage('learnSetup'); }
+    else if (action === 'exam') { showPage('examSetup'); }
+    else if (action === 'favorites') { renderFavorites(); showPage('favoritesSetup'); }
+  });
+});
+
+function refreshMain() {
+  const errs = errors(); const total = DATA.length;
+  const ok = total - errs.size; const pct = total ? Math.round((ok / total) * 100) : 0;
+  document.getElementById('globalStats').innerHTML = `Всего вопросов: <b>${total}</b> · Без ошибок: <b style="color:var(--correct)">${ok}</b> · С ошибками: <b style="color:var(--wrong)">${errs.size}</b> · Пройдено: <b>${pct}%</b>`;
+  document.getElementById('favCount').textContent = `${favs().size} вопросов`;
+}
+
+function renderSectionsList() {
+  const container = document.getElementById('sectionsList'); 
+  const errs = errors();
+  
+  const rows = sections.map(s => {
+    const items = DATA.filter(q => q.number.startsWith(s + '.'));
+    const errCount = items.filter(q => errs.has(qid(q))).length;
+    const done = items.length - errCount;
+    const pct = items.length ? Math.round((done / items.length) * 100) : 0;
+    const safeTitle = `Сбросить ошибки в разделе ${s}? Это удалит историю ошибок только для этого раздела.`;
+    
+    return `<div class="section-row">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Раздел ${s}</div>
+            <div class="muted">${items.length} вопросов${errCount ? ` · ${errCount} с ошибками` : ''}</div>
+          </div>
+          <div class="section-actions">
+            <button class="nav-btn secondary sm reset-sec" data-sec="${s}" title="${safeTitle}" ${errCount === 0 ? 'disabled' : ''}>Сбросить ошибки</button>
+            <button class="nav-btn start-sec" data-sec="${s}">Начать</button>
+          </div>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  }).join('');
+  
+  const allItems = DATA;
+  const allErrCount = allItems.filter(q => errs.has(qid(q))).length;
+  const allDone = allItems.length - allErrCount;
+  const allPct = Math.round((allDone / allItems.length) * 100);
+
+  const allRow = `<div class="section-row">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Все разделы</div>
+            <div class="muted">${DATA.length} вопросов${allErrCount ? ` · ${allErrCount} с ошибками` : ''}</div>
+          </div>
+          <div class="section-actions">
+            <button class="nav-btn secondary sm reset-sec" data-sec="all" title="Сбросить ошибки во ВСЕХ разделах" ${allErrCount === 0 ? 'disabled' : ''}>Сбросить ошибки</button>
+            <button class="nav-btn start-sec" data-sec="all">Начать</button>
+          </div>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${allPct}%"></div></div>
+      </div>`;
+
+  container.innerHTML = rows + allRow;
+
+  // Обработчики "Начать"
+  container.querySelectorAll('.start-sec').forEach(btn => {
+    btn.addEventListener('click', () => startLearn(btn.dataset.sec));
+  });
+
+  // Обработчики "Сбросить ошибки"
+  container.querySelectorAll('.reset-sec').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sec = btn.dataset.sec;
+      const msg = sec === 'all' 
+        ? 'Сбросить ошибки ВО ВСЕХ разделах?' 
+        : `Сбросить ошибки только в разделе ${sec}?`;
+      if (!confirm(msg)) return;
+      
+      const errSet = errors();
+      if (sec === 'all') {
+        errSet.clear();
+      } else {
+        // Удаляем ошибки только для этого раздела
+        const prefix = sec + '.';
+        for (const id of [...errSet]) {
+          if (id.startsWith(prefix)) errSet.delete(id);
+        }
+      }
+      saveSet(LS_ERRORS, errSet);
+      renderSectionsList();
+      refreshMain();
+    });
+  });
+}
+
+function startLearn(section) {
+  const mode = document.getElementById('learnMode').value;
+  let list = section === 'all' ? DATA.slice() : DATA.filter(q => q.number.startsWith(section + '.'));
+  if (mode === 'errors') {
+    const errs = errors(); list = list.filter(q => errs.has(qid(q)));
+    if (list.length === 0) { alert('В этом разделе нет вопросов с ошибками.'); return; }
+  }
+  if (mode === 'random') list = shuffle(list);
+
+  state.mode = 'learn'; state.questions = list;
+  state.index = 0; state.answers = new Array(list.length).fill(null);
+  state.correct = 0; state.wrong = 0; state.sessionErrors = [];
+  
+  showPage('quiz'); renderQuestion();
+}
+
+document.getElementById('startExamBtn').addEventListener('click', () => {
+  const picked = sections.map(s => {
+    const items = DATA.filter(q => q.number.startsWith(s + '.'));
+    return items[Math.floor(Math.random() * items.length)];
+  });
+  shuffleInPlace(picked);
+  
+  state.mode = 'exam'; state.questions = picked;
+  state.index = 0; state.answers = new Array(picked.length).fill(null);
+  state.correct = 0; state.wrong = 0; state.sessionErrors = [];
+  
+  showPage('quiz'); renderQuestion();
+});
+
+function shuffle(arr) { const a = arr.slice(); shuffleInPlace(a); return a; }
+function shuffleInPlace(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+
+function renderFavorites() {
+  const favSet = favs(); const items = DATA.filter(q => favSet.has(qid(q)));
+  const container = document.getElementById('favContent');
+  if (items.length === 0) { container.innerHTML = `<p class="muted">Пока нет избранных вопросов. Нажмите ⭐ рядом с вопросом.</p>`; return; }
+  container.innerHTML = `<p>Всего в избранном: <b>${items.length}</b></p>
+    <div class="nav" style="margin-bottom:16px;">
+      <button class="nav-btn" id="startFavBtn">Начать тест</button>
+      <button class="nav-btn danger" id="clearFavBtn">Очистить</button>
+    </div>
+    <div id="favList" style="max-height:400px;overflow-y:auto;margin-top:16px;"></div>`;
+  const listEl = container.querySelector('#favList');
+  listEl.innerHTML = items.map(q => `<div class="section-row" style="padding:10px 14px; flex-direction:row; align-items:center;">
+      <div style="flex:1;min-width:200px;"><div class="muted">№ ${q.number}</div><div style="font-size:0.9rem;">${escapeHtml(q.question.slice(0, 100))}${q.question.length > 100 ? '…' : ''}</div></div>
+      <button class="nav-btn secondary unstar-btn" data-id="${qid(q)}" style="flex:0 0 auto; padding:4px 12px;">✕</button>
+    </div>`).join('');
+  listEl.querySelectorAll('.unstar-btn').forEach(btn => btn.addEventListener('click', (e) => {
+      e.stopPropagation(); const set = favs(); set.delete(btn.dataset.id); saveSet(LS_FAV, set); renderFavorites(); refreshMain();
+  }));
+  container.querySelector('#startFavBtn').addEventListener('click', () => {
+    state.mode = 'favorites'; state.questions = shuffle(items);
+    state.index = 0; state.answers = new Array(items.length).fill(null);
+    state.correct = 0; state.wrong = 0; state.sessionErrors = [];
+    showPage('quiz'); renderQuestion();
+  });
+  container.querySelector('#clearFavBtn').addEventListener('click', () => {
+    if (!confirm('Очистить всё избранное?')) return;
+    saveSet(LS_FAV, new Set()); renderFavorites(); refreshMain();
+  });
+}
+function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+const qMetaText = document.getElementById('qMetaText');
+const qText = document.getElementById('qText');
+const optionsEl = document.getElementById('options');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const starBtn = document.getElementById('starBtn');
+const examTopBar = document.getElementById('examTopBar');
+const sidebarNav = document.getElementById('sidebarNav');
+const qGrid = document.getElementById('qGrid');
+
+function renderQuestion() {
+  const q = state.questions[state.index];
+  const ans = state.answers[state.index];
+
+  qMetaText.textContent = `Вопрос ${state.index + 1} из ${state.questions.length} · № ${q.number}`;
+  qText.textContent = q.question;
+
+  const favSet = favs(); const isFav = favSet.has(qid(q));
+  starBtn.textContent = isFav ? '★' : '☆';
+
+  optionsEl.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'option';
+    
+    if (ans) {
+      btn.disabled = true;
+      const isCorrect = q.correct_answers.includes(opt);
+      const isSelected = i === ans.selectedIdx;
+      
+      if (isSelected) btn.classList.add('selected');
+      if (isCorrect) {
+        btn.classList.add('correct');
+      } else if (isSelected) {
+        btn.classList.add('wrong');
+      }
+    } else {
+      btn.addEventListener('click', () => onAnswer(i));
+    }
+
+    // Иконка справа
+    let markHtml = '';
+    if (ans) {
+      const isCorrect = q.correct_answers.includes(opt);
+      const isSelected = i === ans.selectedIdx;
+      if (isCorrect) markHtml = '<span class="mark-icon">✓</span>';
+      else if (isSelected) markHtml = '<span class="mark-icon">✗</span>';
+    }
+
+    btn.innerHTML = `<div class="checkbox"></div><div style="flex-grow:1;">${escapeHtml(opt)}</div>${markHtml}`;
+    optionsEl.appendChild(btn);
+  });
+
+  renderNav();
+  
+  prevBtn.disabled = state.index === 0;
+  nextBtn.textContent = state.index === state.questions.length - 1 ? 'Завершить' : 'Далее →';
+}
+
+function renderNav() {
+  if (state.mode === 'exam') {
+    examTopBar.classList.remove('hidden');
+    sidebarNav.classList.add('hidden');
+    examTopBar.innerHTML = state.questions.map((_, i) => {
+      const ans = state.answers[i];
+      let cls = 'exam-step';
+      if (i === state.index) cls += ' current';
+      else if (ans && ans.isRight) cls += ' passed';
+      else if (ans && !ans.isRight) cls += ' failed';
+      return `<div class="${cls}">${i + 1}</div>`;
+    }).join('');
+  } else {
+    examTopBar.classList.add('hidden');
+    sidebarNav.classList.remove('hidden');
+    
+    qGrid.innerHTML = state.questions.map((_, i) => {
+      const ans = state.answers[i];
+      let cls = 'q-btn';
+      if (i === state.index) cls += ' active';
+      else if (ans && ans.isRight) cls += ' correct';
+      else if (ans && !ans.isRight) cls += ' wrong';
+      else if (ans) cls += ' answered';
+      return `<button class="${cls}" onclick="jumpTo(${i})">${i + 1}</button>`;
+    }).join('');
+  }
+}
+
+window.jumpTo = (idx) => {
+  state.index = idx;
+  renderQuestion();
+};
+
+function onAnswer(selectedIdx) {
+  const q = state.questions[state.index];
+  const selectedText = q.options[selectedIdx];
+  const isRight = q.correct_answers.includes(selectedText);
+  
+  state.answers[state.index] = { selectedIdx, isRight };
+  
+  if (isRight) state.correct++;
+  else { state.wrong++; state.sessionErrors.push(q); }
+  
+  const errSet = errors();
+  if (isRight) errSet.delete(qid(q));
+  else errSet.add(qid(q));
+  saveSet(LS_ERRORS, errSet);
+  
+  refreshMain();
+  renderQuestion();
+}
+
+prevBtn.addEventListener('click', () => {
+  if (state.index > 0) { state.index--; renderQuestion(); }
+});
+
+nextBtn.addEventListener('click', () => {
+  if (state.index < state.questions.length - 1) {
+    state.index++;
+    renderQuestion();
+  } else {
+    if (state.answers.includes(null)) {
+      if (!confirm('Вы ответили не на все вопросы. Завершить тест?')) return;
+    }
+    showResults();
+  }
+});
+
+starBtn.addEventListener('click', () => {
+  const q = state.questions[state.index]; const set = favs();
+  if (set.has(qid(q))) set.delete(qid(q));
+  else set.add(qid(q));
+  saveSet(LS_FAV, set);
+  starBtn.textContent = set.has(qid(q)) ? '★' : '☆';
+  refreshMain();
+});
+
+document.getElementById('exitBtn').addEventListener('click', () => {
+  if (!confirm('Выйти из теста?')) return;
+  state.mode = null; showPage('mainMenu'); refreshMain();
+});
+
+function showResults() {
+  const total = state.questions.length;
+  const answeredCount = state.answers.filter(a => a !== null).length;
+  const pct = total ? Math.round((state.correct / total) * 100) : 0;
+  let html = '';
+
+  if (state.mode === 'exam') {
+    const passed = state.correct >= 12;
+    const verdict = passed
+      ? `<div style="font-size:1.5rem;text-align:center;color:var(--correct);font-weight:700;margin:16px 0;">✅ ЭКЗАМЕН СДАН</div>`
+      : `<div style="font-size:1.5rem;text-align:center;color:var(--wrong);font-weight:700;margin:16px 0;">❌ ЭКЗАМЕН НЕ СДАН</div>`;
+    
+    html += `<h2>🎯 Результат</h2>${verdict}
+      <p class="muted" style="text-align:center;">Порог сдачи: 12 из ${total} правильных</p>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="num">${total}</div><div class="lbl">Всего</div></div>
+        <div class="stat-box"><div class="num" style="color:var(--correct)">${state.correct}</div><div class="lbl">Правильно</div></div>
+        <div class="stat-box"><div class="num" style="color:var(--wrong)">${state.wrong}</div><div class="lbl">Неправильно</div></div>
+        <div class="stat-box"><div class="num">${pct}%</div><div class="lbl">Процент</div></div>
+      </div>`;
+  } else {
+    const grade = pct >= 90 ? '🏆 Отлично!' : pct >= 75 ? '👍 Хорошо' : pct >= 60 ? '🙂 Удовлетворительно' : '📚 Нужно повторить';
+    html += `<h2>📊 Результаты</h2>
+      <p style="text-align:center;">Отвечено вопросов: <b>${answeredCount} из ${total}</b></p>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="num">${total}</div><div class="lbl">Всего</div></div>
+        <div class="stat-box"><div class="num" style="color:var(--correct)">${state.correct}</div><div class="lbl">Правильно</div></div>
+        <div class="stat-box"><div class="num" style="color:var(--wrong)">${state.wrong}</div><div class="lbl">Неправильно</div></div>
+        <div class="stat-box"><div class="num">${pct}%</div><div class="lbl">Процент</div></div>
+      </div>
+      <p style="text-align:center; font-size: 1.2rem; margin-top:20px;">${grade}</p>`;
+  }
+
+  html += `<div class="nav" style="margin-top:20px;">
+      <button class="nav-btn" onclick="showPage('mainMenu'); refreshMain()">В меню</button>
+      <button class="nav-btn secondary" onclick="showPage('${state.mode === 'exam' ? 'examSetup' : 'learnSetup'}')">Назад к настройкам</button>
+    </div>`;
+
+  document.getElementById('resultsCard').innerHTML = html;
+  showPage('results');
+}
+
+refreshMain();
+showPage('mainMenu');
+</script>
+</body>
+</html>
