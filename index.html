@@ -90,7 +90,7 @@
   .exam-step {
     flex: 1; min-width: 30px; height: 32px; display: flex; align-items: center; justify-content: center;
     font-size: 0.85rem; font-weight: 600; border-radius: 6px; color: var(--muted);
-    background: var(--card); transition: all 0.2s;
+    background: var(--card); transition: all 0.2s; cursor: pointer;
   }
   .exam-step.current { background: var(--primary); color: white; }
   .exam-step.passed { background: var(--correct); color: white; }
@@ -164,7 +164,6 @@
   .bar-wrap { width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
   .bar-fill { height: 100%; background: var(--correct); transition: width 0.3s; }
 
-  /* Стили для списка результатов */
   .result-item {
     display: flex; align-items: flex-start; gap: 12px; padding: 14px;
     border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s;
@@ -179,6 +178,11 @@
   .detail-opt.correct-ans { border-color: var(--correct); background: var(--correct-bg); }
   .detail-opt.correct-ans.user-ans { border-color: var(--correct); background: var(--correct-bg); font-weight: bold; }
   .detail-opt.wrong-ans { border-color: var(--wrong); background: var(--wrong-bg); }
+
+  .history-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .history-row:last-child { border-bottom: none; }
+  .history-date { color: var(--muted); font-size: 0.9rem; }
+  .history-score { font-weight: 700; font-size: 1.1rem; }
 
   @media (max-width: 768px) {
     .test-layout { flex-direction: column; }
@@ -214,6 +218,10 @@
         <div class="icon">⭐</div><div class="title">Избранное</div>
         <div class="subtitle" id="favCount">0 вопросов</div>
       </div>
+      <div class="menu-card" data-action="stats">
+        <div class="icon">📊</div><div class="title">Статистика</div>
+        <div class="subtitle" id="statCount">0 попыток экзамена</div>
+      </div>
     </div>
     <div class="card"><div class="muted" id="globalStats"></div></div>
   </div>
@@ -247,6 +255,14 @@
     <div class="card">
       <h2>⭐ Избранное</h2>
       <div id="favContent"></div>
+    </div>
+  </div>
+
+  <!-- ЭКРАН СТАТИСТИКИ -->
+  <div id="statsSetup" class="hidden">
+    <div class="card">
+      <h2>📊 Статистика экзаменов</h2>
+      <div id="statsContent"></div>
     </div>
   </div>
 
@@ -294,15 +310,19 @@ const DATA = window.QUIZ_DATA || [];
 const LS_ERRORS = 'quiz_errors_v1';
 const LS_FAV    = 'quiz_favorites_v1';
 const LS_THEME  = 'quiz_theme_v1';
+const LS_HISTORY = 'quiz_exam_history';
 
 const loadSet = (key) => { try { const r = localStorage.getItem(key); return r ? new Set(JSON.parse(r)) : new Set(); } catch { return new Set(); } };
 const saveSet = (key, set) => { try { localStorage.setItem(key, JSON.stringify([...set])); } catch {} };
 const loadStr = (key, def) => { try { return localStorage.getItem(key) || def; } catch { return def; } };
 const saveStr = (key, v) => { try { localStorage.setItem(key, v); } catch {} };
+const loadArr = (key) => { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : []; } catch { return []; } };
+const saveArr = (key, arr) => { try { localStorage.setItem(key, JSON.stringify(arr)); } catch {} };
 
 const qid = (q) => q.number;
 const errors = () => loadSet(LS_ERRORS);
 const favs   = () => loadSet(LS_FAV);
+const history = () => loadArr(LS_HISTORY);
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
@@ -317,20 +337,27 @@ document.getElementById('themeBtn').addEventListener('click', () => {
 
 const state = {
   mode: null, questions: [], index: 0,
-  answers: [], // { selectedIdx, isRight }
-  correct: 0, wrong: 0, sessionErrors: [],
+  answers: [], correct: 0, wrong: 0, sessionErrors: [],
   viewResultIdx: null
 };
 
 const sections = [...new Set(DATA.map(q => q.number.split('.')[0]))].sort((a,b)=>+a-+b);
 
 function showPage(page) {
-  ['mainMenu', 'learnSetup', 'examSetup', 'favoritesSetup', 'quiz', 'results']
+  ['mainMenu', 'learnSetup', 'examSetup', 'favoritesSetup', 'statsSetup', 'quiz', 'results']
     .forEach(id => document.getElementById(id).classList.add('hidden'));
   document.getElementById(page).classList.remove('hidden');
   document.getElementById('backBtn').classList.toggle('hidden', page === 'mainMenu');
   
-  const titles = { mainMenu: '🎓 Тренажёр 1С:Профессионал', learnSetup: '📚 Учить по разделам', examSetup: '🎯 Экзамен', favoritesSetup: '⭐ Избранное', quiz: '📝 Тест', results: '📊 Результаты' };
+  const titles = { 
+    mainMenu: '🎓 Тренажёр 1С:Профессионал', 
+    learnSetup: '📚 Учить по разделам', 
+    examSetup: '🎯 Экзамен', 
+    favoritesSetup: '⭐ Избранное', 
+    statsSetup: '📊 Статистика',
+    quiz: '📝 Тест', 
+    results: '📊 Результаты' 
+  };
   document.getElementById('pageTitle').textContent = titles[page] || '';
 }
 
@@ -347,6 +374,7 @@ document.querySelectorAll('.menu-card').forEach(card => {
     if (action === 'learn') { renderSectionsList(); showPage('learnSetup'); }
     else if (action === 'exam') { showPage('examSetup'); }
     else if (action === 'favorites') { renderFavorites(); showPage('favoritesSetup'); }
+    else if (action === 'stats') { renderStats(); showPage('statsSetup'); }
   });
 });
 
@@ -355,6 +383,7 @@ function refreshMain() {
   const ok = total - errs.size; const pct = total ? Math.round((ok / total) * 100) : 0;
   document.getElementById('globalStats').innerHTML = `Всего вопросов: <b>${total}</b> · Без ошибок: <b style="color:var(--correct)">${ok}</b> · С ошибками: <b style="color:var(--wrong)">${errs.size}</b> · Пройдено: <b>${pct}%</b>`;
   document.getElementById('favCount').textContent = `${favs().size} вопросов`;
+  document.getElementById('statCount').textContent = `${history().length} попыток экзамена`;
 }
 
 function renderSectionsList() {
@@ -489,6 +518,45 @@ function renderFavorites() {
     saveSet(LS_FAV, new Set()); renderFavorites(); refreshMain();
   });
 }
+
+function renderStats() {
+  const hist = history();
+  const container = document.getElementById('statsContent');
+  
+  if (hist.length === 0) {
+    container.innerHTML = `<p class="muted">Пока нет пройденных экзаменов.</p>`;
+    return;
+  }
+
+  let html = `<div class="nav" style="margin-bottom:16px; justify-content:flex-end;">
+    <button class="nav-btn danger sm" onclick="clearHistory()">Очистить историю</button>
+  </div>`;
+
+  // Инвертируем, чтобы последние были сверху
+  [...hist].reverse().forEach((h, i) => {
+    const isPassed = h.score >= 12;
+    const color = isPassed ? 'var(--correct)' : 'var(--wrong)';
+    const icon = isPassed ? '✅' : '❌';
+    
+    html += `<div class="history-row">
+      <div>
+        <div class="history-date">${h.date}</div>
+        <div class="muted">Правильных: ${h.score} из ${h.total}</div>
+      </div>
+      <div class="history-score" style="color:${color}">${icon} ${Math.round(h.score/h.total*100)}%</div>
+    </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+window.clearHistory = () => {
+  if (!confirm('Удалить всю историю экзаменов?')) return;
+  saveArr(LS_HISTORY, []);
+  renderStats();
+  refreshMain();
+};
+
 function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 const qMetaText = document.getElementById('qMetaText');
@@ -522,17 +590,18 @@ function renderQuestion() {
       const isSelected = i === ans.selectedIdx;
       
       if (isExam) {
-        // В экзамене блокируем кнопки после ответа, но не показываем правильные/неправильные
-        btn.disabled = true;
+        // В экзамене не блокируем нажатие (можно менять ответ), но подсвечиваем выбранный
         if (isSelected) btn.classList.add('selected');
       } else {
-        // В обычном режиме показываем правильные/неправильные
         btn.disabled = true;
         if (isSelected) btn.classList.add('selected');
         if (isCorrect) btn.classList.add('correct');
         else if (isSelected) btn.classList.add('wrong');
       }
-    } else {
+    }
+    
+    // Обработчик нажатия всегда активен в экзамене
+    if (!ans || isExam) {
       btn.addEventListener('click', () => onAnswer(i));
     }
 
@@ -559,11 +628,11 @@ function renderNav() {
   if (state.mode === 'exam') {
     examTopBar.classList.remove('hidden');
     sidebarNav.classList.add('hidden');
-    // В верхней панели экзамена тоже не показываем правильные/неправильные до конца
     examTopBar.innerHTML = state.questions.map((_, i) => {
       let cls = 'exam-step';
       if (i === state.index) cls += ' current';
-      return `<div class="${cls}">${i + 1}</div>`;
+      // В экзамене больше не красим пройденные шаги в зеленый/красный
+      return `<div class="${cls}" onclick="jumpTo(${i})">${i + 1}</div>`;
     }).join('');
   } else {
     examTopBar.classList.add('hidden');
@@ -585,9 +654,20 @@ window.jumpTo = (idx) => { state.index = idx; renderQuestion(); };
 
 function onAnswer(selectedIdx) {
   const q = state.questions[state.index];
+  
+  // Если в экзамене пытаемся нажать на уже выбранный вариант — ничего не делаем
+  const prevAns = state.answers[state.index];
+  if (prevAns && prevAns.selectedIdx === selectedIdx && state.mode === 'exam') return;
+
   const selectedText = q.options[selectedIdx];
   const isRight = q.correct_answers.includes(selectedText);
   
+  // В экзамене, если меняем ответ, нужно отминусовать старый результат
+  if (prevAns && state.mode === 'exam') {
+    if (prevAns.isRight) state.correct--;
+    else state.wrong--;
+  }
+
   state.answers[state.index] = { selectedIdx, isRight };
   
   if (isRight) state.correct++;
@@ -632,7 +712,6 @@ document.getElementById('exitBtn').addEventListener('click', () => {
   state.mode = null; showPage('mainMenu'); refreshMain();
 });
 
-// --- Отрисовка результатов ---
 window.showResultDetail = (i) => {
   state.viewResultIdx = i;
   renderResults();
@@ -651,7 +730,6 @@ function renderResults() {
   let html = '';
 
   if (state.viewResultIdx !== null) {
-    // Просмотр конкретного вопроса из результатов
     const i = state.viewResultIdx;
     const q = state.questions[i];
     const ans = state.answers[i];
@@ -679,9 +757,7 @@ function renderResults() {
       html += `<div class="${cls}">${escapeHtml(opt)}<b>${mark}</b></div>`;
     });
 
-    if (!ans) {
-      html += `<p style="color:var(--warn); margin-top:16px;">Вы не ответили на этот вопрос.</p>`;
-    }
+    if (!ans) html += `<p style="color:var(--warn); margin-top:16px;">Вы не ответили на этот вопрос.</p>`;
 
     html += `</div>`;
     card.innerHTML = html;
@@ -689,12 +765,18 @@ function renderResults() {
     return;
   }
 
-  // Общий экран результатов
   if (state.mode === 'exam') {
     const passed = state.correct >= 12;
     const verdict = passed
       ? `<div style="font-size:1.5rem;text-align:center;color:var(--correct);font-weight:700;margin:16px 0;">✅ ЭКЗАМЕН СДАН</div>`
       : `<div style="font-size:1.5rem;text-align:center;color:var(--wrong);font-weight:700;margin:16px 0;">❌ ЭКЗАМЕН НЕ СДАН</div>`;
+    
+    // Сохраняем результат в историю
+    const hist = history();
+    const now = new Date();
+    const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0,5);
+    hist.push({ date: dateStr, score: state.correct, total: total });
+    saveArr(LS_HISTORY, hist);
     
     html += `<h2>🎯 Результат экзамена</h2>${verdict}
       <p class="muted" style="text-align:center;">Порог сдачи: 12 из ${total} правильных</p>
@@ -722,7 +804,6 @@ function renderResults() {
     });
     html += `</div>`;
   } else {
-    // Для обычной тренировки
     const grade = pct >= 90 ? '🏆 Отлично!' : pct >= 75 ? '👍 Хорошо' : pct >= 60 ? '🙂 Удовлетворительно' : '📚 Нужно повторить';
     html += `<h2>📊 Результаты</h2>
       <p style="text-align:center;">Отвечено вопросов: <b>${answeredCount} из ${total}</b></p>
