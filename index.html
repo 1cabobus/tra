@@ -51,6 +51,31 @@
     transition: background 0.2s, border-color 0.2s;
   }
 
+  /* Поиск */
+  .search-box {
+    position: relative; margin-bottom: 16px; display: flex; gap: 8px;
+  }
+  .search-input {
+    width: 100%; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); font-size: 1rem; outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--primary); }
+  .search-results {
+    position: absolute; top: 100%; left: 0; right: 0; background: var(--card);
+    border: 1px solid var(--border); border-radius: 10px; margin-top: 4px;
+    max-height: 350px; overflow-y: auto; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .search-result-item {
+    padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer;
+    transition: background 0.15s;
+  }
+  .search-result-item:hover { background: var(--bg); }
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-sec { font-size: 0.75rem; color: var(--primary); margin-bottom: 4px; }
+  .search-result-text { font-size: 0.9rem; }
+  .search-empty { padding: 16px; text-align: center; color: var(--muted); }
+
   .menu-grid {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 16px; margin-bottom: 16px;
@@ -99,8 +124,9 @@
   .question { font-size: 1.15rem; font-weight: 500; margin-bottom: 24px; }
   .question-meta {
     font-size: 0.85rem; color: var(--muted); margin-bottom: 8px;
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; justify-content: space-between; align-items: flex-start;
   }
+  .q-section-title { color: var(--primary); font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; display: block; }
   
   .option {
     display: flex; align-items: flex-start; gap: 12px;
@@ -206,6 +232,12 @@
   </div>
 
   <div id="mainMenu">
+    <!-- Поиск на главной -->
+    <div class="search-box">
+      <input type="text" id="mainSearch" class="search-input" placeholder="🔍 Найти вопрос по тексту..." oninput="onSearchInput('mainSearch', 'mainSearchResults')">
+      <div id="mainSearchResults" class="search-results hidden"></div>
+    </div>
+
     <div class="menu-grid">
       <div class="menu-card" data-action="learn">
         <div class="icon">📚</div><div class="title">Учить по разделам</div>
@@ -228,6 +260,12 @@
   </div>
 
   <div id="learnSetup" class="hidden">
+    <!-- Поиск на странице разделов -->
+    <div class="search-box">
+      <input type="text" id="secSearch" class="search-input" placeholder="🔍 Найти вопрос по тексту..." oninput="onSearchInput('secSearch', 'secSearchResults')">
+      <div id="secSearchResults" class="search-results hidden"></div>
+    </div>
+
     <div class="card">
       <h2>Настройки тренировки</h2>
       <label for="learnMode">Режим</label>
@@ -280,7 +318,10 @@
       <div class="main-content">
         <div class="card">
           <div class="question-meta">
-            <span id="qMetaText"></span>
+            <div>
+              <span id="qSectionTitle" class="q-section-title"></span>
+              <span id="qMetaText"></span>
+            </div>
             <button class="star-btn" id="starBtn" title="В избранное" style="background:none;border:none;cursor:pointer;font-size:1.6rem;padding:0;color:var(--star)">☆</button>
           </div>
           <div class="question" id="qText"></div>
@@ -328,21 +369,13 @@ const favs   = () => loadSet(LS_FAV);
 const history = () => loadArr(LS_HISTORY);
 const learnProgress = () => loadObj(LS_LEARN_PROGRESS); 
 
-// Словарь названий разделов (взято из документа)
 const SECTION_NAMES = {
-  "1": "Общие механизмы, понятия и термины",
-  "2": "Редакторы и инструменты общие",
-  "3": "Редакторы и инструменты режима разработки",
-  "4": "Конструкторы",
-  "5": "Технология разработки",
-  "6": "Объектная модель прикладного решения",
-  "7": "Табличная модель прикладного решения",
-  "8": "Механизмы интеграции и обмена данными",
-  "9": "Обслуживание прикладного решения",
-  "10": "Интерфейсные механизмы",
-  "11": "Механизмы построения отчетности",
-  "12": "Механизмы оперативного учета",
-  "13": "Объекты и механизмы бухгалтерского учета",
+  "1": "Общие механизмы, понятия и термины", "2": "Редакторы и инструменты общие",
+  "3": "Редакторы и инструменты режима разработки", "4": "Конструкторы", "5": "Технология разработки",
+  "6": "Объектная модель прикладного решения", "7": "Табличная модель прикладного решения",
+  "8": "Механизмы интеграции и обмена данными", "9": "Обслуживание прикладного решения",
+  "10": "Интерфейсные механизмы", "11": "Механизмы построения отчетности",
+  "12": "Механизмы оперативного учета", "13": "Объекты и механизмы бухгалтерского учета",
   "14": "Механизмы сложных периодических расчетов"
 };
 
@@ -360,8 +393,7 @@ document.getElementById('themeBtn').addEventListener('click', () => {
 const state = {
   mode: null, questions: [], index: 0,
   answers: [], correct: 0, wrong: 0, sessionErrors: [],
-  viewResultIdx: null,
-  historyViewIdx: null // Для просмотра старых попыток
+  viewResultIdx: null, historyViewIdx: null
 };
 
 const sections = [...new Set(DATA.map(q => q.number.split('.')[0]))].sort((a,b)=>+a-+b);
@@ -373,15 +405,14 @@ function showPage(page) {
   document.getElementById('backBtn').classList.toggle('hidden', page === 'mainMenu');
   
   const titles = { 
-    mainMenu: '🎓 Тренажёр 1С:Профессионал', 
-    learnSetup: '📚 Учить по разделам', 
-    examSetup: '🎯 Экзамен', 
-    favoritesSetup: '⭐ Избранное', 
-    statsSetup: '📊 Статистика',
-    quiz: '📝 Тест', 
-    results: '📊 Результаты' 
+    mainMenu: '🎓 Тренажёр 1С:Профессионал', learnSetup: '📚 Учить по разделам', 
+    examSetup: '🎯 Экзамен', favoritesSetup: '⭐ Избранное', statsSetup: '📊 Статистика',
+    quiz: '📝 Тест', results: '📊 Результаты' 
   };
   document.getElementById('pageTitle').textContent = titles[page] || '';
+
+  // Скрываем результаты поиска при переходе
+  document.querySelectorAll('.search-results').forEach(el => el.classList.add('hidden'));
 }
 
 document.getElementById('backBtn').addEventListener('click', () => {
@@ -401,6 +432,62 @@ document.querySelectorAll('.menu-card').forEach(card => {
   });
 });
 
+// --- ПОИСК ---
+function onSearchInput(inputId, resultsId) {
+  const input = document.getElementById(inputId);
+  const resultsBox = document.getElementById(resultsId);
+  const query = input.value.trim().toLowerCase();
+  
+  if (query.length < 2) {
+    resultsBox.classList.add('hidden');
+    return;
+  }
+
+  const matches = DATA.filter(q => q.question.toLowerCase().includes(query)).slice(0, 30);
+  
+  if (matches.length === 0) {
+    resultsBox.innerHTML = `<div class="search-empty">Ничего не найдено</div>`;
+    resultsBox.classList.remove('hidden');
+    return;
+  }
+
+  resultsBox.innerHTML = matches.map(q => {
+    const secNum = q.number.split('.')[0];
+    const secName = SECTION_NAMES[secNum] || '';
+    return `<div class="search-result-item" onclick="openSearchQuestion('${q.number}')">
+      <div class="search-result-sec">Раздел ${secNum}. ${secName}</div>
+      <div class="search-result-text">${escapeHtml(q.question)}</div>
+    </div>`;
+  }).join('');
+  resultsBox.classList.remove('hidden');
+}
+
+window.openSearchQuestion = (number) => {
+  const q = DATA.find(x => x.number === number);
+  if (!q) return;
+  
+  // Запускаем одиночный тест для этого вопроса
+  state.mode = 'learn';
+  state.questions = [q];
+  state.index = 0;
+  state.answers = [null];
+  state.correct = 0; state.wrong = 0; state.sessionErrors = [];
+  
+  // Очищаем поле поиска
+  document.getElementById('mainSearch').value = '';
+  document.getElementById('secSearch').value = '';
+  
+  showPage('quiz');
+  renderQuestion();
+};
+
+// Скрываем поиск при клике вне его
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-box')) {
+    document.querySelectorAll('.search-results').forEach(el => el.classList.add('hidden'));
+  }
+});
+
 function refreshMain() {
   const errs = errors(); const total = DATA.length;
   const prog = learnProgress();
@@ -408,7 +495,7 @@ function refreshMain() {
   const correct = Object.values(prog).filter(v => v === true).length;
   const pct = answered ? Math.round((correct / answered) * 100) : 0;
   
-  document.getElementById('globalStats').innerHTML = `Всего вопросов в базе: <b>${total}</b> · Отвечено: <b>${answered}</b> · Ошибок: <b style="color:var(--wrong)">${errs.size}</b> · Успешность: <b>${pct}%</b>`;
+  document.getElementById('globalStats').innerHTML = `Всего вопросов: <b>${total}</b> · Отвечено: <b>${answered}</b> · Ошибок: <b style="color:var(--wrong)">${errs.size}</b> · Успешность: <b>${pct}%</b>`;
   document.getElementById('favCount').textContent = `${favs().size} вопросов`;
   document.getElementById('statCount').textContent = `${history().length} попыток экзамена`;
 }
@@ -430,7 +517,7 @@ function renderSectionsList() {
         <div class="section-header">
           <div>
             <div class="section-title">${titleName}</div>
-            <div class="muted">Прогресс: ${secCorrect.length} из ${items.length} (${pct}%)${errCount ? ` · <span style="color:var(--wrong)">${errCount} на повторение</span>` : ''}</div>
+            <div class="muted">Пройдено: ${secCorrect.length} из ${items.length} (${pct}%)${errCount ? ` · <span style="color:var(--wrong)">${errCount} на повторение</span>` : ''}</div>
           </div>
           <div class="section-actions">
             <button class="nav-btn secondary sm reset-sec" data-sec="${s}" ${errCount === 0 ? 'disabled' : ''}>Сбросить ошибки</button>
@@ -450,7 +537,7 @@ function renderSectionsList() {
         <div class="section-header">
           <div>
             <div class="section-title">Все разделы</div>
-            <div class="muted">Прогресс: ${allCorrect} из ${DATA.length} (${allPct}%)${allErr ? ` · <span style="color:var(--wrong)">${allErr} на повторение</span>` : ''}</div>
+            <div class="muted">Пройдено: ${allCorrect} из ${DATA.length} (${allPct}%)${allErr ? ` · <span style="color:var(--wrong)">${allErr} на повторение</span>` : ''}</div>
           </div>
           <div class="section-actions">
             <button class="nav-btn secondary sm reset-sec" data-sec="all" ${allErr === 0 ? 'disabled' : ''}>Сбросить ошибки</button>
@@ -529,10 +616,17 @@ function renderFavorites() {
     </div>
     <div id="favList" style="max-height:400px;overflow-y:auto;margin-top:16px;"></div>`;
   const listEl = container.querySelector('#favList');
-  listEl.innerHTML = items.map(q => `<div class="section-row" style="padding:10px 14px; flex-direction:row; align-items:center;">
-      <div style="flex:1;min-width:200px;"><div class="muted">№ ${q.number}</div><div style="font-size:0.9rem;">${escapeHtml(q.question.slice(0, 100))}${q.question.length > 100 ? '…' : ''}</div></div>
+  listEl.innerHTML = items.map(q => {
+    const secNum = q.number.split('.')[0];
+    const secName = SECTION_NAMES[secNum] || '';
+    return `<div class="section-row" style="padding:10px 14px; flex-direction:row; align-items:center;">
+      <div style="flex:1;min-width:200px;">
+        <div class="search-result-sec">Раздел ${secNum}. ${secName} · № ${q.number}</div>
+        <div style="font-size:0.9rem;">${escapeHtml(q.question.slice(0, 100))}${q.question.length > 100 ? '…' : ''}</div>
+      </div>
       <button class="nav-btn secondary unstar-btn" data-id="${qid(q)}" style="flex:0 0 auto; padding:4px 12px;">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   listEl.querySelectorAll('.unstar-btn').forEach(btn => btn.addEventListener('click', (e) => {
       e.stopPropagation(); const set = favs(); set.delete(btn.dataset.id); saveSet(LS_FAV, set); renderFavorites(); refreshMain();
   }));
@@ -548,13 +642,11 @@ function renderFavorites() {
   });
 }
 
-// --- Статистика ---
 function renderStats() {
   const hist = history();
   const container = document.getElementById('statsContent');
   
   if (state.historyViewIdx !== null) {
-    // Просмотр деталей конкретной попытки
     const h = hist[state.historyViewIdx];
     let html = `<div class="nav" style="justify-content:flex-start; margin-top:0; margin-bottom:16px;">
       <button class="nav-btn secondary" onclick="state.historyViewIdx=null; renderStats()">← Назад к статистике</button>
@@ -589,7 +681,6 @@ function renderStats() {
   </div>`;
 
   [...hist].reverse().forEach((h, i) => {
-    // i здесь — это индекс в перевернутом массиве. Нам нужен реальный индекс.
     const realIdx = hist.length - 1 - i;
     const isPassed = h.score >= 12;
     const color = isPassed ? 'var(--correct)' : 'var(--wrong)';
@@ -608,7 +699,6 @@ function renderStats() {
 }
 
 window.showHistoryDetail = (i) => {
-  // Открываем детали вопроса из истории
   const h = history()[state.historyViewIdx];
   const d = h.details[i];
   const container = document.getElementById('statsContent');
@@ -650,8 +740,8 @@ window.clearHistory = () => {
 
 function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-// --- Тест ---
 const qMetaText = document.getElementById('qMetaText');
+const qSectionTitle = document.getElementById('qSectionTitle');
 const qText = document.getElementById('qText');
 const optionsEl = document.getElementById('options');
 const prevBtn = document.getElementById('prevBtn');
@@ -666,6 +756,10 @@ function renderQuestion() {
   const ans = state.answers[state.index];
   const isExam = state.mode === 'exam';
 
+  const secNum = q.number.split('.')[0];
+  const secName = SECTION_NAMES[secNum] || '';
+  
+  qSectionTitle.textContent = `Раздел ${secNum}. ${secName}`;
   qMetaText.textContent = `Вопрос ${state.index + 1} из ${state.questions.length} · № ${q.number}`;
   qText.textContent = q.question;
 
@@ -691,7 +785,6 @@ function renderQuestion() {
       }
     }
     
-    // Обработчик нажатия всегда активен в экзамене
     if (!ans || isExam) {
       btn.addEventListener('click', () => onAnswer(i));
     }
@@ -742,7 +835,6 @@ window.jumpTo = (idx) => { state.index = idx; renderQuestion(); };
 
 function onAnswer(selectedIdx) {
   const q = state.questions[state.index];
-  
   const prevAns = state.answers[state.index];
   if (prevAns && prevAns.selectedIdx === selectedIdx && state.mode === 'exam') return;
 
@@ -755,17 +847,14 @@ function onAnswer(selectedIdx) {
   }
 
   state.answers[state.index] = { selectedIdx, isRight };
-  
   if (isRight) state.correct++;
   else { state.wrong++; state.sessionErrors.push(q); }
   
-  // Сохранение ошибок
   const errSet = errors();
   if (isRight) errSet.delete(qid(q));
   else errSet.add(qid(q));
   saveSet(LS_ERRORS, errSet);
   
-  // Сохранение прогресса для разделов
   const prog = learnProgress();
   prog[qid(q)] = isRight;
   saveObj(LS_LEARN_PROGRESS, prog);
@@ -774,9 +863,7 @@ function onAnswer(selectedIdx) {
   renderQuestion();
 }
 
-prevBtn.addEventListener('click', () => {
-  if (state.index > 0) { state.index--; renderQuestion(); }
-});
+prevBtn.addEventListener('click', () => { if (state.index > 0) { state.index--; renderQuestion(); } });
 
 nextBtn.addEventListener('click', () => {
   if (state.index < state.questions.length - 1) {
@@ -804,15 +891,8 @@ document.getElementById('exitBtn').addEventListener('click', () => {
   state.mode = null; showPage('mainMenu'); refreshMain();
 });
 
-window.showResultDetail = (i) => {
-  state.viewResultIdx = i;
-  renderResults();
-};
-
-window.backToResults = () => {
-  state.viewResultIdx = null;
-  renderResults();
-};
+window.showResultDetail = (i) => { state.viewResultIdx = i; renderResults(); };
+window.backToResults = () => { state.viewResultIdx = null; renderResults(); };
 
 function renderResults() {
   const total = state.questions.length;
@@ -862,20 +942,15 @@ function renderResults() {
       ? `<div style="font-size:1.5rem;text-align:center;color:var(--correct);font-weight:700;margin:16px 0;">✅ ЭКЗАМЕН СДАН</div>`
       : `<div style="font-size:1.5rem;text-align:center;color:var(--wrong);font-weight:700;margin:16px 0;">❌ ЭКЗАМЕН НЕ СДАН</div>`;
     
-    // Сохраняем результат в историю
     const hist = history();
     const now = new Date();
     const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0,5);
     
-    // Готовим детали для истории
     const details = state.questions.map((q, i) => {
       const ans = state.answers[i];
       return {
-        number: q.number,
-        question: q.question,
-        options: q.options,
-        correct_answers: q.correct_answers,
-        userIdx: ans ? ans.selectedIdx : null,
+        number: q.number, question: q.question, options: q.options,
+        correct_answers: q.correct_answers, userIdx: ans ? ans.selectedIdx : null,
         isRight: ans ? ans.isRight : false
       };
     });
