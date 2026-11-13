@@ -179,7 +179,8 @@
   .detail-opt.correct-ans.user-ans { border-color: var(--correct); background: var(--correct-bg); font-weight: bold; }
   .detail-opt.wrong-ans { border-color: var(--wrong); background: var(--wrong-bg); }
 
-  .history-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .history-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s;}
+  .history-row:hover { background: var(--bg); }
   .history-row:last-child { border-bottom: none; }
   .history-date { color: var(--muted); font-size: 0.9rem; }
   .history-score { font-weight: 700; font-size: 1.1rem; }
@@ -258,7 +259,6 @@
     </div>
   </div>
 
-  <!-- ЭКРАН СТАТИСТИКИ -->
   <div id="statsSetup" class="hidden">
     <div class="card">
       <h2>📊 Статистика экзаменов</h2>
@@ -311,6 +311,7 @@ const LS_ERRORS = 'quiz_errors_v1';
 const LS_FAV    = 'quiz_favorites_v1';
 const LS_THEME  = 'quiz_theme_v1';
 const LS_HISTORY = 'quiz_exam_history';
+const LS_LEARN_PROGRESS = 'quiz_learn_progress';
 
 const loadSet = (key) => { try { const r = localStorage.getItem(key); return r ? new Set(JSON.parse(r)) : new Set(); } catch { return new Set(); } };
 const saveSet = (key, set) => { try { localStorage.setItem(key, JSON.stringify([...set])); } catch {} };
@@ -318,11 +319,32 @@ const loadStr = (key, def) => { try { return localStorage.getItem(key) || def; }
 const saveStr = (key, v) => { try { localStorage.setItem(key, v); } catch {} };
 const loadArr = (key) => { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : []; } catch { return []; } };
 const saveArr = (key, arr) => { try { localStorage.setItem(key, JSON.stringify(arr)); } catch {} };
+const loadObj = (key) => { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : {}; } catch { return {}; } };
+const saveObj = (key, obj) => { try { localStorage.setItem(key, JSON.stringify(obj)); } catch {} };
 
 const qid = (q) => q.number;
 const errors = () => loadSet(LS_ERRORS);
 const favs   = () => loadSet(LS_FAV);
 const history = () => loadArr(LS_HISTORY);
+const learnProgress = () => loadObj(LS_LEARN_PROGRESS); 
+
+// Словарь названий разделов (взято из документа)
+const SECTION_NAMES = {
+  "1": "Общие механизмы, понятия и термины",
+  "2": "Редакторы и инструменты общие",
+  "3": "Редакторы и инструменты режима разработки",
+  "4": "Конструкторы",
+  "5": "Технология разработки",
+  "6": "Объектная модель прикладного решения",
+  "7": "Табличная модель прикладного решения",
+  "8": "Механизмы интеграции и обмена данными",
+  "9": "Обслуживание прикладного решения",
+  "10": "Интерфейсные механизмы",
+  "11": "Механизмы построения отчетности",
+  "12": "Механизмы оперативного учета",
+  "13": "Объекты и механизмы бухгалтерского учета",
+  "14": "Механизмы сложных периодических расчетов"
+};
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
@@ -338,7 +360,8 @@ document.getElementById('themeBtn').addEventListener('click', () => {
 const state = {
   mode: null, questions: [], index: 0,
   answers: [], correct: 0, wrong: 0, sessionErrors: [],
-  viewResultIdx: null
+  viewResultIdx: null,
+  historyViewIdx: null // Для просмотра старых попыток
 };
 
 const sections = [...new Set(DATA.map(q => q.number.split('.')[0]))].sort((a,b)=>+a-+b);
@@ -380,8 +403,12 @@ document.querySelectorAll('.menu-card').forEach(card => {
 
 function refreshMain() {
   const errs = errors(); const total = DATA.length;
-  const ok = total - errs.size; const pct = total ? Math.round((ok / total) * 100) : 0;
-  document.getElementById('globalStats').innerHTML = `Всего вопросов: <b>${total}</b> · Без ошибок: <b style="color:var(--correct)">${ok}</b> · С ошибками: <b style="color:var(--wrong)">${errs.size}</b> · Пройдено: <b>${pct}%</b>`;
+  const prog = learnProgress();
+  const answered = Object.keys(prog).length;
+  const correct = Object.values(prog).filter(v => v === true).length;
+  const pct = answered ? Math.round((correct / answered) * 100) : 0;
+  
+  document.getElementById('globalStats').innerHTML = `Всего вопросов в базе: <b>${total}</b> · Отвечено: <b>${answered}</b> · Ошибок: <b style="color:var(--wrong)">${errs.size}</b> · Успешность: <b>${pct}%</b>`;
   document.getElementById('favCount').textContent = `${favs().size} вопросов`;
   document.getElementById('statCount').textContent = `${history().length} попыток экзамена`;
 }
@@ -389,22 +416,24 @@ function refreshMain() {
 function renderSectionsList() {
   const container = document.getElementById('sectionsList'); 
   const errs = errors();
+  const prog = learnProgress();
   
   const rows = sections.map(s => {
     const items = DATA.filter(q => q.number.startsWith(s + '.'));
+    const secAnswered = items.filter(q => prog[qid(q)] !== undefined);
+    const secCorrect = secAnswered.filter(q => prog[qid(q)] === true);
+    const pct = secAnswered.length ? Math.round((secCorrect.length / secAnswered.length) * 100) : 0;
     const errCount = items.filter(q => errs.has(qid(q))).length;
-    const done = items.length - errCount;
-    const pct = items.length ? Math.round((done / items.length) * 100) : 0;
-    const safeTitle = `Сбросить ошибки в разделе ${s}? Это удалит историю ошибок только для этого раздела.`;
+    const titleName = SECTION_NAMES[s] ? `Раздел ${s}. ${SECTION_NAMES[s]}` : `Раздел ${s}`;
     
     return `<div class="section-row">
         <div class="section-header">
           <div>
-            <div class="section-title">Раздел ${s}</div>
-            <div class="muted">${items.length} вопросов${errCount ? ` · ${errCount} с ошибками` : ''}</div>
+            <div class="section-title">${titleName}</div>
+            <div class="muted">Прогресс: ${secCorrect.length} из ${items.length} (${pct}%)${errCount ? ` · <span style="color:var(--wrong)">${errCount} на повторение</span>` : ''}</div>
           </div>
           <div class="section-actions">
-            <button class="nav-btn secondary sm reset-sec" data-sec="${s}" title="${safeTitle}" ${errCount === 0 ? 'disabled' : ''}>Сбросить ошибки</button>
+            <button class="nav-btn secondary sm reset-sec" data-sec="${s}" ${errCount === 0 ? 'disabled' : ''}>Сбросить ошибки</button>
             <button class="nav-btn start-sec" data-sec="${s}">Начать</button>
           </div>
         </div>
@@ -412,19 +441,19 @@ function renderSectionsList() {
       </div>`;
   }).join('');
   
-  const allItems = DATA;
-  const allErrCount = allItems.filter(q => errs.has(qid(q))).length;
-  const allDone = allItems.length - allErrCount;
-  const allPct = Math.round((allDone / allItems.length) * 100);
+  const allAnswered = Object.keys(prog).length;
+  const allCorrect = Object.values(prog).filter(v => v === true).length;
+  const allPct = allAnswered ? Math.round((allCorrect / allAnswered) * 100) : 0;
+  const allErr = errs.size;
 
   const allRow = `<div class="section-row">
         <div class="section-header">
           <div>
             <div class="section-title">Все разделы</div>
-            <div class="muted">${DATA.length} вопросов${allErrCount ? ` · ${allErrCount} с ошибками` : ''}</div>
+            <div class="muted">Прогресс: ${allCorrect} из ${DATA.length} (${allPct}%)${allErr ? ` · <span style="color:var(--wrong)">${allErr} на повторение</span>` : ''}</div>
           </div>
           <div class="section-actions">
-            <button class="nav-btn secondary sm reset-sec" data-sec="all" title="Сбросить ошибки во ВСЕХ разделах" ${allErrCount === 0 ? 'disabled' : ''}>Сбросить ошибки</button>
+            <button class="nav-btn secondary sm reset-sec" data-sec="all" ${allErr === 0 ? 'disabled' : ''}>Сбросить ошибки</button>
             <button class="nav-btn start-sec" data-sec="all">Начать</button>
           </div>
         </div>
@@ -519,9 +548,36 @@ function renderFavorites() {
   });
 }
 
+// --- Статистика ---
 function renderStats() {
   const hist = history();
   const container = document.getElementById('statsContent');
+  
+  if (state.historyViewIdx !== null) {
+    // Просмотр деталей конкретной попытки
+    const h = hist[state.historyViewIdx];
+    let html = `<div class="nav" style="justify-content:flex-start; margin-top:0; margin-bottom:16px;">
+      <button class="nav-btn secondary" onclick="state.historyViewIdx=null; renderStats()">← Назад к статистике</button>
+    </div>
+    <h3>Попытка от ${h.date}</h3>
+    <p class="muted">Результат: <b>${h.score} из ${h.total}</b></p>
+    <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-top:16px;">`;
+    
+    h.details.forEach((d, i) => {
+      const cls = d.isRight ? 'ok' : 'err';
+      const icon = d.isRight ? '✓' : '✗';
+      html += `<div class="result-item ${cls}" onclick="showHistoryDetail(${i})">
+        <div class="icon">${icon}</div>
+        <div>
+          <div style="font-weight:600; font-size:0.95rem;">Вопрос ${i + 1} (№ ${d.number})</div>
+          <div class="muted" style="font-size:0.85rem;">${escapeHtml(d.question.slice(0, 80))}${d.question.length > 80 ? '…' : ''}</div>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+    container.innerHTML = html;
+    return;
+  }
   
   if (hist.length === 0) {
     container.innerHTML = `<p class="muted">Пока нет пройденных экзаменов.</p>`;
@@ -532,13 +588,14 @@ function renderStats() {
     <button class="nav-btn danger sm" onclick="clearHistory()">Очистить историю</button>
   </div>`;
 
-  // Инвертируем, чтобы последние были сверху
   [...hist].reverse().forEach((h, i) => {
+    // i здесь — это индекс в перевернутом массиве. Нам нужен реальный индекс.
+    const realIdx = hist.length - 1 - i;
     const isPassed = h.score >= 12;
     const color = isPassed ? 'var(--correct)' : 'var(--wrong)';
     const icon = isPassed ? '✅' : '❌';
     
-    html += `<div class="history-row">
+    html += `<div class="history-row" onclick="state.historyViewIdx=${realIdx}; renderStats()">
       <div>
         <div class="history-date">${h.date}</div>
         <div class="muted">Правильных: ${h.score} из ${h.total}</div>
@@ -550,6 +607,40 @@ function renderStats() {
   container.innerHTML = html;
 }
 
+window.showHistoryDetail = (i) => {
+  // Открываем детали вопроса из истории
+  const h = history()[state.historyViewIdx];
+  const d = h.details[i];
+  const container = document.getElementById('statsContent');
+  
+  let html = `<div class="nav" style="justify-content:flex-start; margin-top:0; margin-bottom:16px;">
+    <button class="nav-btn secondary" onclick="renderStats()">← Назад к попытке</button>
+  </div>
+  <h2>Вопрос ${i + 1} из ${h.total} · № ${d.number}</h2>
+  <div class="question" style="margin-top:16px;">${escapeHtml(d.question)}</div>
+  <div class="result-detail">
+    <div class="muted" style="margin-bottom:12px;">Варианты ответов:</div>`;
+    
+  d.options.forEach((opt, optIdx) => {
+    const isCorrect = d.correct_answers.includes(opt);
+    const isUser = d.userIdx === optIdx;
+    let cls = 'detail-opt';
+    if (isCorrect) cls += ' correct-ans';
+    else if (isUser) cls += ' wrong-ans';
+    
+    let mark = '';
+    if (isCorrect && isUser) mark = ' ✓ (Ваш выбор, верно)';
+    else if (isCorrect) mark = ' ✓ (Правильный ответ)';
+    else if (isUser) mark = ' ✗ (Ваш выбор, неверно)';
+
+    html += `<div class="${cls}">${escapeHtml(opt)}<b>${mark}</b></div>`;
+  });
+  
+  if (d.userIdx === null) html += `<p style="color:var(--warn); margin-top:16px;">Вы не ответили на этот вопрос.</p>`;
+  html += `</div>`;
+  container.innerHTML = html;
+};
+
 window.clearHistory = () => {
   if (!confirm('Удалить всю историю экзаменов?')) return;
   saveArr(LS_HISTORY, []);
@@ -559,6 +650,7 @@ window.clearHistory = () => {
 
 function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// --- Тест ---
 const qMetaText = document.getElementById('qMetaText');
 const qText = document.getElementById('qText');
 const optionsEl = document.getElementById('options');
@@ -590,7 +682,6 @@ function renderQuestion() {
       const isSelected = i === ans.selectedIdx;
       
       if (isExam) {
-        // В экзамене не блокируем нажатие (можно менять ответ), но подсвечиваем выбранный
         if (isSelected) btn.classList.add('selected');
       } else {
         btn.disabled = true;
@@ -605,7 +696,6 @@ function renderQuestion() {
       btn.addEventListener('click', () => onAnswer(i));
     }
 
-    // Иконка справа (только если это не экзамен)
     let markHtml = '';
     if (ans && !isExam) {
       const isCorrect = q.correct_answers.includes(opt);
@@ -619,7 +709,6 @@ function renderQuestion() {
   });
 
   renderNav();
-  
   prevBtn.disabled = state.index === 0;
   nextBtn.textContent = state.index === state.questions.length - 1 ? 'Завершить' : 'Далее →';
 }
@@ -631,7 +720,6 @@ function renderNav() {
     examTopBar.innerHTML = state.questions.map((_, i) => {
       let cls = 'exam-step';
       if (i === state.index) cls += ' current';
-      // В экзамене больше не красим пройденные шаги в зеленый/красный
       return `<div class="${cls}" onclick="jumpTo(${i})">${i + 1}</div>`;
     }).join('');
   } else {
@@ -655,14 +743,12 @@ window.jumpTo = (idx) => { state.index = idx; renderQuestion(); };
 function onAnswer(selectedIdx) {
   const q = state.questions[state.index];
   
-  // Если в экзамене пытаемся нажать на уже выбранный вариант — ничего не делаем
   const prevAns = state.answers[state.index];
   if (prevAns && prevAns.selectedIdx === selectedIdx && state.mode === 'exam') return;
 
   const selectedText = q.options[selectedIdx];
   const isRight = q.correct_answers.includes(selectedText);
   
-  // В экзамене, если меняем ответ, нужно отминусовать старый результат
   if (prevAns && state.mode === 'exam') {
     if (prevAns.isRight) state.correct--;
     else state.wrong--;
@@ -673,10 +759,16 @@ function onAnswer(selectedIdx) {
   if (isRight) state.correct++;
   else { state.wrong++; state.sessionErrors.push(q); }
   
+  // Сохранение ошибок
   const errSet = errors();
   if (isRight) errSet.delete(qid(q));
   else errSet.add(qid(q));
   saveSet(LS_ERRORS, errSet);
+  
+  // Сохранение прогресса для разделов
+  const prog = learnProgress();
+  prog[qid(q)] = isRight;
+  saveObj(LS_LEARN_PROGRESS, prog);
   
   refreshMain();
   renderQuestion();
@@ -758,7 +850,6 @@ function renderResults() {
     });
 
     if (!ans) html += `<p style="color:var(--warn); margin-top:16px;">Вы не ответили на этот вопрос.</p>`;
-
     html += `</div>`;
     card.innerHTML = html;
     showPage('results');
@@ -775,7 +866,21 @@ function renderResults() {
     const hist = history();
     const now = new Date();
     const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0,5);
-    hist.push({ date: dateStr, score: state.correct, total: total });
+    
+    // Готовим детали для истории
+    const details = state.questions.map((q, i) => {
+      const ans = state.answers[i];
+      return {
+        number: q.number,
+        question: q.question,
+        options: q.options,
+        correct_answers: q.correct_answers,
+        userIdx: ans ? ans.selectedIdx : null,
+        isRight: ans ? ans.isRight : false
+      };
+    });
+    
+    hist.push({ date: dateStr, score: state.correct, total: total, details: details });
     saveArr(LS_HISTORY, hist);
     
     html += `<h2>🎯 Результат экзамена</h2>${verdict}
